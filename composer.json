@@ -1,0 +1,19 @@
+{
+  "name": "salamek/servis24Api",
+  "description": "API for servis24.cz using servis24.cz as source of data (parsing loaded HTML).",
+  "keywords": ["servis24.cz", "API", "transactions"],
+  "homepage": "https://github.com/Salamek/servis24.cz",
+  "license": ["BSD-4-Clause", "GPL-3.0+"],
+  "authors": [
+    {
+      "name": "Adam Schubet",
+      "homepage": "http://www.salamek.cz"
+    }
+  ],
+  "autoload": {
+    "classmap": ["Salamek/Servis24/"]
+  },
+  "require": {
+    "php": ">=5.3.0"
+  }
+}

@@ -30,7 +30,7 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-namespace Salamek\Servis24;
+namespace Salamek;
 
 /**
  * Request implemented as file_get_contents, so we dont need cURL and openbase_dir = none

@@ -1,5 +1,5 @@
 {
-  "name": "salamek/servis24Api",
+  "name": "salamek/servis24api",
   "description": "API for servis24.cz using servis24.cz as source of data (parsing loaded HTML).",
   "keywords": ["servis24.cz", "API", "transactions"],
   "homepage": "https://github.com/Salamek/servis24.cz",

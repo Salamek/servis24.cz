@@ -94,7 +94,7 @@ class Servis24
     $hiddens = $xpath->query('//*[@id="'.$formId .'"]//input[@type=\'hidden\']');
 
     //Call only when signout option is in code
-    if ($signoutForm[0])
+    if ($signoutForm->item(0))
     {
       $postData = array();
       foreach ($hiddens AS $hidden)
@@ -104,7 +104,7 @@ class Servis24
 
       $postData['source'] = 'logoutButton';
 
-      $url = $this->absolutizeHtmlUrl($this->lastUrl, $signoutForm[0]->getAttribute('action'));
+      $url = $this->absolutizeHtmlUrl($this->lastUrl, $signoutForm->item(0)->getAttribute('action'));
       $request = new request($url, 'POST', $postData, $this->cookies);
       list($data, $headers, $lastUrl) = $r = $request->call();
     }
@@ -158,7 +158,7 @@ class Servis24
     $loginForm = $xpath->query('//*[@id="loginForm"]');
     $hiddens = $xpath->query('//*[@id="loginForm"]//input[@type=\'hidden\']');
 
-    if ($loginForm[0])
+    if ($loginForm->item(0))
     {
       $postData = array();
       $postData['id_clientid'] = $this->clientId;
@@ -188,7 +188,7 @@ class Servis24
       }
 
       //Do signIN (Post form)
-      $url = $this->absolutizeHtmlUrl($lastUrl, $loginForm[0]->getAttribute('action'));
+      $url = $this->absolutizeHtmlUrl($lastUrl, $loginForm->item(0)->getAttribute('action'));
       $request = new request($url, 'POST', $postData, $this->cookies);
       list($data, $headers, $lastUrl) = $r = $request->call();
       $this->lastData = $data;
@@ -214,7 +214,7 @@ class Servis24
     $hiddens = $xpath->query('//*[@id="form_basePasThGet_trn"]//input[@type=\'hidden\']');
     $accountsSelect = $xpath->query('//select[@id="formattedaccount"]/option');
 
-    if ($transactionForm[0])//We loaded transactionForm successfully
+    if ($transactionForm->item(0))//We loaded transactionForm successfully
     {
 
       $postData = array();
@@ -252,7 +252,7 @@ class Servis24
 
       $postData['source'] = 'doSearch';
 
-      $url = $this->absolutizeHtmlUrl($lastUrl, $transactionForm[0]->getAttribute('action'));
+      $url = $this->absolutizeHtmlUrl($lastUrl, $transactionForm->item(0)->getAttribute('action'));
       $request = new request($url, 'POST', $postData, $this->cookies);
       list($data, $headers, $lastUrl) = $request->call();
       $this->lastData = $data;
@@ -264,7 +264,7 @@ class Servis24
       $hiddens = $xpath->query('//*[@id="form_basePasThGet_lst"]//input[@type=\'hidden\']');
       $inputs = $xpath->query('//*[@id="form_basePasThGet_lst"]//input[@type=\'text\']');
 
-      if ($exportForm[0])//We loaded exportForm successfully
+      if ($exportForm->item(0))//We loaded exportForm successfully
       {
         $postData = array();
         foreach ($hiddens AS $hidden)
@@ -283,7 +283,7 @@ class Servis24
         $postData['state'] = '';
         $postData['value'] = '';
 
-        $url = $this->absolutizeHtmlUrl($lastUrl, $exportForm[0]->getAttribute('action'));
+        $url = $this->absolutizeHtmlUrl($lastUrl, $exportForm->item(0)->getAttribute('action'));
         $request = new request($url, 'POST', $postData, $this->cookies);
         list($data, $headers, $lastUrl) = $request->call();
         $this->lastData = $data;

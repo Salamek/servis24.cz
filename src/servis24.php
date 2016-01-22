@@ -281,7 +281,6 @@ class Servis24
         $postData['downloadformat'] = 2;
         //Finds source
         //<button type="button" title="Ulo&#382;it" onclick="return _chain('disable_load_window();','submitForm(\'form_basePasThGet_lst\',1,{source:\'j_id_p1\'});return false;',this,event,true)" class="button af_commandButton">Ulo&#382;it</button>
-        file_put_contents('t.html',$data);
         $regexpSource = "/\<button\s+type=\"button\".+?onclick=\".+?\{source\:\S'(\S+)\S'\}\);/si";
         $matches = array();
         if (preg_match($regexpSource, $data, $matches))

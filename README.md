@@ -4,7 +4,7 @@
   This code is using your LIVE access ID and Password, use only on your own risk.
 </div>
 
-## API for servis24.cz using servis24.cz as source of data (parsing loaded HTML). Currently it supports only signin, and getting list of transactions
+## API for servis24.cz using servis24.cz as source of data (parsing loaded HTML and CSV). Currently it supports only signin, and getting list of transactions
 
 
 ### Installation

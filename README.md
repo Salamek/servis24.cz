@@ -21,6 +21,8 @@ composer require salamek/servis24api
 
 require_once "vendor/autoload.php";
 
+use Salamek\Servis24;
+
 $active24 = new Servis24('ACCOUNT_ID', 'ACCOUNT_PASSWORD');
 try
 {

@@ -34,12 +34,20 @@ namespace Salamek;
 
 class Servis24
 {
-  private $cookies = array();
+  /** @var string  */
   private $clientId;
+
+  /** @var string  */
   private $password;
 
+  /** @var \DOMXPath */
   private $lastData;
+
+  /** @var string */
   private $lastUrl;
+
+  /** @var HttpRequest */
+  private $httpRequest;
 
   /*array(
     0 =>'Vše',
@@ -71,23 +79,42 @@ class Servis24
   const TRANSACTION_SEPA = 12;
 
 
-  public function __construct($clientId, $password)
+  /**
+   * Servis24 constructor.
+   * @param string $clientId Client ID
+   * @param string $password Password
+   * @param null|string $cookieJar path to store cookie jar, default is /tmp/cookiejar.txt
+   */
+  public function __construct($clientId, $password, $cookieJar = null)
   {
     $this->clientId = $clientId;
     $this->password = $password;
+
+    if (is_null($cookieJar))
+    {
+      $cookieJar = tempnam('/tmp', 'cookiejar.txt');
+    }
+
+    $this->httpRequest = new HttpRequest($cookieJar);
     $this->signIn();
   }
 
+  /**
+   *
+   */
   public function __destruct()
   {
-    //When we try to login again withnout proper logout... theyr web is doing weird things
+    //When we try to login again withnout proper logout... their web is doing weird things
     $this->signOut();
   }
 
+  /**
+   * Sign out currently logged user
+   */
   private function signOut()
   {
     //SignOut form is on every page so we use lastData variable for parsing
-    $xpath = $this->xpath($this->lastData);
+    $xpath = $this->lastData;
     //$formId = 'j_id_w';
     $formId = 'j_id_y';
     $signoutForm = $xpath->query('//*[@id="'.$formId .'"]');
@@ -104,57 +131,28 @@ class Servis24
 
       $postData['source'] = 'logoutButton';
 
-      $url = $this->absolutizeHtmlUrl($this->lastUrl, $signoutForm->item(0)->getAttribute('action'));
-      $request = new request($url, 'POST', $postData, $this->cookies);
-      list($data, $headers, $lastUrl) = $r = $request->call();
+      $url = HttpRequest::absolutizeHtmlUrl($this->lastUrl, $signoutForm->item(0)->getAttribute('action'));
+
+      $this->httpRequest->post($url, $postData);
     }
   }
 
-
-  private function xpath($html)
-  {
-    $dom = new \DOMDocument('1.0', 'utf-8');
-    $html = mb_convert_encoding($html, 'HTML-ENTITIES', "UTF-8");
-    @$dom->loadHTML($html);
-    return new \DOMXPath($dom);
-  }
-
-  private function absolutizeHtmlUrl($loadedUrl, $url)
-  {
-    $parsedLoadedUrl = parse_url($loadedUrl);
-    if (strpos($url, './') === 0)
-    {
-      $exploded = explode('/', $parsedLoadedUrl['path']);
-      array_pop($exploded);
-      return $parsedLoadedUrl['scheme'].'://'.$parsedLoadedUrl['host'].'/'.implode('/', $exploded).'/'.str_replace('./', '', $url);
-    }
-    else if (strpos($url, '../') === 0)
-    {
-      $exploded = explode('/', $parsedLoadedUrl['path']);
-      for ($i = 0; $i < substr_count($url, '../'); $i++)
-      {
-        array_pop($exploded);
-      }
-      return $parsedLoadedUrl['scheme'].'://'.$parsedLoadedUrl['host'].'/'.implode('/', $exploded).'/'.str_replace('../', '', $url);
-    }
-    else
-    {
-      return $parsedLoadedUrl['scheme'].'://'.$parsedLoadedUrl['host'].$url;
-    }
-  }
-
+  /**
+   * Sign in
+   * @throws \Exception
+   */
   public function signIn()
   {
     //Load SignIn page
-    $request = new request('https://www.servis24.cz/ebanking-s24/ib/base/usr/aut/login', 'GET');
-    $request->setMaxRedirections(5); //There is big chance this will fail sometimes... cos servis24 is piece of shit full of inifinite redirects
-    list($data, $headers, $lastUrl) = $request->call();
-    $this->lastData = $data;
+    $this->httpRequest->setMaxRedirections(5); //There is big chance this will fail sometimes... cos servis24 is piece of shit full of inifinite redirects
+    $httpResponse = $this->httpRequest->get('https://www.servis24.cz/ebanking-s24/ib/base/usr/aut/login');
+    $this->httpRequest->setMaxRedirections(10);
+    $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+    $lastUrl = $httpResponse->getLastUrl();
+    $this->lastData = $xpath;
     $this->lastUrl = $lastUrl;
-    $this->cookies = array_merge($this->cookies, $headers['cookies']); //Add loaded cookies to cookie storage
 
     //Find needed data from signIn page as form action and hidden fields
-    $xpath = $this->xpath($data);
     $loginForm = $xpath->query('//*[@id="loginForm"]');
     $hiddens = $xpath->query('//*[@id="loginForm"]//input[@type=\'hidden\']');
 
@@ -188,13 +186,13 @@ class Servis24
       }
 
       //Do signIN (Post form)
-      $url = $this->absolutizeHtmlUrl($lastUrl, $loginForm->item(0)->getAttribute('action'));
-      $request = new request($url, 'POST', $postData, $this->cookies);
-      list($data, $headers, $lastUrl) = $r = $request->call();
-      $this->lastData = $data;
-      $this->lastUrl = $lastUrl;
+      $url = HttpRequest::absolutizeHtmlUrl($lastUrl, $loginForm->item(0)->getAttribute('action'));
+
+      $httpResponse = $this->httpRequest->post($url, $postData);
+
+      $this->lastData = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+      $this->lastUrl = $httpResponse->getLastUrl();
       //!FIXME check $data for something to confirm/deny successfull login
-      $this->cookies = array_merge($this->cookies, $headers['cookies']); //Add loaded cookies to cookie storage
     }
     else
     {
@@ -202,14 +200,23 @@ class Servis24
     }
   }
 
+  /**
+   * Returns list of transactions
+   * @param string $account bank account to fetch
+   * @param int $category category
+   * @return array
+   * @throws \Exception
+   */
   public function getTransactions($account, $category = 0)
   {
     $url = 'https://www.servis24.cz/ebanking-s24/ib/base/pas/th/get?execution=e3s1';
-    $request = new request($url, 'GET', array('execution' => 'e3s1'), $this->cookies);
-    list($data, $headers, $lastUrl) = $request->call();
-    $this->lastData = $data;
+
+    $httpResponse = $this->httpRequest->get($url, ['execution' => 'e3s1']);
+    $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+    $lastUrl = $httpResponse->getLastUrl();
+
+    $this->lastData = $xpath;
     $this->lastUrl = $lastUrl;
-    $xpath = $this->xpath($data);
     $transactionForm = $xpath->query('//*[@id="form_basePasThGet_trn"]');
     $hiddens = $xpath->query('//*[@id="form_basePasThGet_trn"]//input[@type=\'hidden\']');
     $accountsSelect = $xpath->query('//select[@id="formattedaccount"]/option');
@@ -252,14 +259,16 @@ class Servis24
 
       $postData['source'] = 'doSearch';
 
-      $url = $this->absolutizeHtmlUrl($lastUrl, $transactionForm->item(0)->getAttribute('action'));
-      $request = new request($url, 'POST', $postData, $this->cookies);
-      list($data, $headers, $lastUrl) = $request->call();
-      $this->lastData = $data;
+      $url = HttpRequest::absolutizeHtmlUrl($lastUrl, $transactionForm->item(0)->getAttribute('action'));
+
+      $httpResponse = $this->httpRequest->post($url, $postData);
+      $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+      $lastUrl = $httpResponse->getLastUrl();
+
+      $this->lastData = $xpath;
       $this->lastUrl = $lastUrl;
 
       // Parse data for CSV export form
-      $xpath = $this->xpath($data);
       $exportForm = $xpath->query('//*[@id="form_basePasThGet_lst"]');
       $hiddens = $xpath->query('//*[@id="form_basePasThGet_lst"]//input[@type=\'hidden\']');
       $inputs = $xpath->query('//*[@id="form_basePasThGet_lst"]//input[@type=\'text\']');
@@ -283,7 +292,7 @@ class Servis24
         //<button type="button" title="Ulo&#382;it" onclick="return _chain('disable_load_window();','submitForm(\'form_basePasThGet_lst\',1,{source:\'j_id_p1\'});return false;',this,event,true)" class="button af_commandButton">Ulo&#382;it</button>
         $regexpSource = "/\<button\s+type=\"button\".+?onclick=\".+?\{source\:\S'(\S+)\S'\}\);/si";
         $matches = array();
-        if (preg_match($regexpSource, $data, $matches))
+        if (preg_match($regexpSource, $httpResponse->getBody(HttpResponse::FORMAT_RAW), $matches))
         {
           $postData['source'] = $matches[1];
         }
@@ -294,13 +303,16 @@ class Servis24
         $postData['state'] = '';
         $postData['value'] = '';
 
-        $url = $this->absolutizeHtmlUrl($lastUrl, $exportForm->item(0)->getAttribute('action'));
-        $request = new request($url, 'POST', $postData, $this->cookies);
-        list($data, $headers, $lastUrl) = $request->call();
-        $this->lastData = $data;
+        $url = HttpRequest::absolutizeHtmlUrl($lastUrl, $exportForm->item(0)->getAttribute('action'));
+
+        $httpResponse = $this->httpRequest->post($url, $postData);
+
+        $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+        $lastUrl = $httpResponse->getLastUrl();
+        $this->lastData = $xpath;
         $this->lastUrl = $lastUrl;
         //OMS (something like OMG) they use CP1250!!! for export!!! Fuck them! Fuck me! Fuck you! Fuck everything!
-        $dataUTF8 = iconv("CP1250", "UTF-8", $data); //Convert that shit
+        $dataUTF8 = iconv("CP1250", "UTF-8", $httpResponse->getBody(HttpResponse::FORMAT_RAW)); //Convert that shit
 
         //Parse CSV
         $rows = str_getcsv($dataUTF8, "\n");
@@ -354,7 +366,7 @@ class Servis24
       }
       else
       {
-        throw new Exception('Failed to load export form');
+        throw new \Exception('Failed to load export form');
       }
     }
     else

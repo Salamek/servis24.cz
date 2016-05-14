@@ -23,11 +23,11 @@ require_once "vendor/autoload.php";
 
 use Salamek\Servis24;
 
-$active24 = new Servis24('ACCOUNT_ID', 'ACCOUNT_PASSWORD');
+$servis24 = new Servis24('ACCOUNT_ID', 'ACCOUNT_PASSWORD');
 try
 {
   //Return transactions as array filtred by Servis24::TRANSACTION_REVENUES
-  $array = $active24->getTransactions('BANK_ACCOUNT_NUMBER', Servis24::TRANSACTION_REVENUES);
+  $array = $servis24->getTransactions('BANK_ACCOUNT_NUMBER', Servis24::TRANSACTION_REVENUES);
   echo '<pre>';
   print_r($array);
   echo '</pre>';

@@ -184,8 +184,15 @@ class Servis24
             $httpResponse = $this->httpRequest->post($url, $postData);
 
             $this->lastData = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+
+            $errors = $this->lastData->query('//li[@class="msgError"]');
+            if ($errors->length) {
+                foreach ($errors AS $childNode) {
+                    throw new \Exception(sprintf('Failed to login: %s', $childNode->textContent));
+                }
+            }
+            
             $this->lastUrl = $httpResponse->getLastUrl();
-            //!FIXME check $data for something to confirm/deny successfull login
         } else {
             throw new \Exception('Failed to load login form');
         }

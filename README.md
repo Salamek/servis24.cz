@@ -1,5 +1,7 @@
 # servis24.cz
 
+[![Build Status](https://travis-ci.org/Salamek/servis24.cz.svg?branch=master)](https://travis-ci.org/Salamek/servis24.cz)
+
 <div style="width:100%; height:50px; background:#f2dede; border: 1px solid #ebccd1; color:#a94442;">
   This code is using your LIVE access ID and Password, use only on your own risk.
 </div>

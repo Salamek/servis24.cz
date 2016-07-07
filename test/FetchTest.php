@@ -8,19 +8,25 @@ use Salamek\Servis24;
 class FetchTest extends PHPUnit_Framework_TestCase
 {
     /** @var Servis24 */
-    public $servis24;
+    private $servis24;
+
+    private $configuration;
 
     public function setUp()
     {
-        $this->servis24 = new Servis24('fake_id', 'fake_password');
+        $configurationJson = file_get_contents(__DIR__.'/config.json');
+        $this->configuration = json_decode($configurationJson);
+        $this->servis24 = new Servis24($this->configuration->username, $this->configuration->password, 'cookiejar.txt');
     }
-
+    
     /**
      * @test
      * @expectedException \Exception
      */
     public function getRawBody()
     {
-        $transactionList = $this->servis24->getTransactions('fake_account_number', Servis24::TRANSACTION_ALL);
+        $transactionList = $this->servis24->getTransactions($this->configuration->account, Servis24::TRANSACTION_ALL);
+
+        print_r($transactionList);
     }
 }

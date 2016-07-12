@@ -16,6 +16,10 @@ composer require salamek/servis24api
 
 ```
 
+### Setup on servis24.cz
+
+You must enable DAILY extracts on account (ACCOUNT_ID) you wish to watch
+
 ### Usage
 
 ```php
@@ -25,19 +29,13 @@ require_once "vendor/autoload.php";
 
 use Salamek\Servis24;
 
-$servis24 = new Servis24('ACCOUNT_ID', 'ACCOUNT_PASSWORD');
-try
-{
-  //Return transactions as array filtred by Servis24::TRANSACTION_REVENUES
-  $array = $servis24->getTransactions('BANK_ACCOUNT_NUMBER', Servis24::TRANSACTION_REVENUES);
-  echo '<pre>';
-  print_r($array);
-  echo '</pre>';
-}
-catch (\Exception $e)
-{
-  //It is posible that call will fail but it is not a configuration or code issue... servis24.cz is rly bad piece of sh*t and it act very strange on relogin
-  //So i suggest to try calling it one more time after error is catched (and use sleep between calls)
-  echo $e->getMessage();
-}
+$servis24 = new Servis24('ACCOUNT_ID', 'ACCOUNT_PASSWORD', '/my/secured/storage');
+
+
+//Return transactions as array filtred by dateFrom and dateTo
+$array = $servis24->getTransactions('BANK_ACCOUNT_NUMBER', new \DateTime('2016-01-20'), new \DateTime());
+echo '<pre>';
+print_r($array);
+echo '</pre>';
+
 ```

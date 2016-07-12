@@ -83,16 +83,7 @@ class Servis24
 
         $this->httpRequest = new HttpRequest($securedStorage.'/cookiejar.txt');
     }
-
-    /**
-     *
-     */
-    public function __destruct()
-    {
-        //When we try to login again withnout proper logout... their web is doing weird things
-        //!FIXME $this->signOut();
-    }
-
+    
     /**
      * Sign out currently logged user
      */
@@ -206,173 +197,12 @@ class Servis24
     }
 
     /**
-     * Returns list of transactions
-     * @param string $account bank account to fetch
-     * @param int $category category
+     * @param $account
+     * @param \DateTime|null $fromDate
+     * @param \DateTime|null $toDate
      * @return array
      * @throws \Exception
      */
-    public function getTransactionsOld($account, $category = 0)
-    {
-        //We need to be signed in for this action
-        $this->checkSignedIn();
-
-
-        $url = 'https://www.servis24.cz/ebanking-s24/ib/base/pas/th/get?execution=e3s1';
-
-        $httpResponse = $this->httpRequest->get($url, ['execution' => 'e3s1']);
-        $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
-
-        $lastUrl = $httpResponse->getLastUrl();
-
-        $this->lastData = $xpath;
-        $this->lastUrl = $lastUrl;
-        $transactionForm = $xpath->query('//*[@id="form_basePasThGet_trn"]');
-        $hiddens = $xpath->query('//*[@id="form_basePasThGet_trn"]//input[@type=\'hidden\']');
-        $accountsSelect = $xpath->query('//select[@id="formattedaccount"]/option');
-
-        if ($transactionForm->item(0))//We loaded transactionForm successfully
-        {
-
-            $postData = array();
-            foreach ($hiddens AS $hidden) {
-                $postData[$hidden->getAttribute('name')] = $hidden->getAttribute('value');
-            }
-
-            //Find AccountID
-            $accountId = null;
-            foreach ($accountsSelect AS $options) {
-                if (strpos((string)$options->nodeValue, (string)$account) !== false) {
-                    $accountId = $options->getAttribute('value');
-                    break;
-                }
-            }
-
-            $postData['formattedaccount'] = $accountId;
-            $postData['trncategory'] = $category; //ID from:
-
-            $postData['timeIntervalRadio'] = 'timeIntervalRadio_lastXdays'; //Limit by number of days:
-            $postData['timeIntervalRadio_lastXdays_input'] = 30;
-            $postData['userpayees'] = '';
-            $postData['recaccountnumber'] = '';
-            $postData['recbankcode'] = '';
-            $postData['cardnumber'] = '';
-            $postData['amountfrom'] = '';
-            $postData['amountto'] = '';
-            $postData['payervariablesymbol'] = '';
-            $postData['constantsymbol'] = '';
-            $postData['recspecificsymbol'] = '';
-            $postData['textvalue'] = '';
-
-            $postData['source'] = 'doSearch';
-
-            $url = HttpRequest::absolutizeHtmlUrl($lastUrl, $transactionForm->item(0)->getAttribute('action'));
-
-            $httpResponse = $this->httpRequest->post($url, $postData);
-            $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
-            $lastUrl = $httpResponse->getLastUrl();
-
-            $this->lastData = $xpath;
-            $this->lastUrl = $lastUrl;
-
-            // Parse data for CSV export form
-            $exportForm = $xpath->query('//*[@id="form_basePasThGet_lst"]');
-            $hiddens = $xpath->query('//*[@id="form_basePasThGet_lst"]//input[@type=\'hidden\']');
-            $inputs = $xpath->query('//*[@id="form_basePasThGet_lst"]//input[@type=\'text\']');
-
-            if ($exportForm->item(0))//We loaded exportForm successfully
-            {
-                $postData = array();
-                foreach ($hiddens AS $hidden) {
-                    $postData[$hidden->getAttribute('name')] = $hidden->getAttribute('value');
-                }
-
-                foreach ($inputs AS $input) {
-                    $postData[$input->getAttribute('name')] = $input->getAttribute('value');
-                }
-
-                $postData['hideBalances'] = 'false';
-                $postData['downloadformat'] = 2;
-                //Finds source
-                //<button type="button" title="Ulo&#382;it" onclick="return _chain('disable_load_window();','submitForm(\'form_basePasThGet_lst\',1,{source:\'j_id_p1\'});return false;',this,event,true)" class="button af_commandButton">Ulo&#382;it</button>
-                $regexpSource = "/\<button\s+type=\"button\".+?onclick=\".+?\{source\:\S'(\S+)\S'\}\);/si";
-                $matches = array();
-                if (preg_match($regexpSource, $httpResponse->getBody(HttpResponse::FORMAT_RAW), $matches)) {
-                    $postData['source'] = $matches[1];
-                } else {
-                    $postData['source'] = 'j_id_p1';
-                }
-                $postData['state'] = '';
-                $postData['value'] = '';
-
-                $url = HttpRequest::absolutizeHtmlUrl($lastUrl, $exportForm->item(0)->getAttribute('action'));
-
-                $httpResponse = $this->httpRequest->post($url, $postData);
-
-                $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
-                $lastUrl = $httpResponse->getLastUrl();
-                $this->lastData = $xpath;
-                $this->lastUrl = $lastUrl;
-                //OMS (something like OMG) they use CP1250!!! for export!!! Fuck them! Fuck me! Fuck you! Fuck everything!
-                $dataUTF8 = iconv("CP1250", "UTF-8", $httpResponse->getBody(HttpResponse::FORMAT_RAW)); //Convert that shit
-
-                //Parse CSV
-                $rows = str_getcsv($dataUTF8, "\n");
-                unset($rows[0]); //Ignore first line
-                $csv = array();
-                foreach ($rows AS $row) {
-                    list(
-                        $type,
-                        $datePostings,
-                        $var2,
-                        $s24_base_pas_th_get_csv_ca_accAmount,
-                        $accountCurrency,
-                        $bankAccount,
-                        $dateProcessed,
-                        $var1,
-                        $ammount,
-                        $currency,
-                        $bankAccountName,
-                        $const,
-                        $spec,
-                        $storno,
-                        $messageForTecipient,
-                        $note,
-                        $paymentReference,
-                        $crap
-                        ) = str_getcsv($row);
-
-                    $csv[] = array(
-                        'type' => $type,
-                        'datePostings' => new \DateTime($datePostings),
-                        'var2' => $var2,
-                        'ammount2' => $s24_base_pas_th_get_csv_ca_accAmount,
-                        'accountCurrency' => $accountCurrency,
-                        'bankAccount' => $bankAccount,
-                        'dateProcessed' => new \DateTime($dateProcessed),
-                        'var1' => $var1,
-                        'ammount' => $ammount,
-                        'currency' => $currency,
-                        'bankAccountName' => $bankAccountName,
-                        'const' => $const,
-                        'spec' => $spec,
-                        'storno' => ($storno == 'Ano'),
-                        'messageForTecipient' => $messageForTecipient,
-                        'note' => $note,
-                        'paymentReference' => $paymentReference
-                    );
-                }
-
-                return $csv;
-            } else {
-                throw new \Exception('Failed to load export form');
-            }
-        } else {
-            throw new \Exception('Failed to load transaction form');
-        }
-    }
-
-
     public function getTransactions($account, \DateTime $fromDate = null, \DateTime $toDate = null)
     {
         //We need to be signed in for this action

@@ -83,7 +83,7 @@ class Servis24
 
         $this->httpRequest = new HttpRequest($securedStorage.'/cookiejar.txt');
     }
-    
+
     /**
      * Sign out currently logged user
      */
@@ -419,6 +419,7 @@ class Servis24
                         'amount' => floatval(strtr(trim($veer), [' ' => '', ',' => '.'])),
                         'currency' => $currency,
                         'type' => $typeInt,
+                        'dateProcessed' => (new \DateTime($dueDate))->format('Y-m-d'),
                         'all' => $all
                     ];
                 }
@@ -443,6 +444,7 @@ class Servis24
                     {
                         foreach($decoded AS $row)
                         {
+                            $row->dateProcessed = new \DateTime($row->dateProcessed);
                             $return[] = $row;
                         }
                     }

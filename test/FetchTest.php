@@ -16,16 +16,18 @@ class FetchTest extends PHPUnit_Framework_TestCase
     {
         $configurationJson = file_get_contents(__DIR__.'/config.json');
         $this->configuration = json_decode($configurationJson);
-        $this->servis24 = new Servis24($this->configuration->username, $this->configuration->password, 'cookiejar.txt');
+        $this->servis24 = new Servis24($this->configuration->username, $this->configuration->password, __DIR__.'/tmp');
     }
-    
+
     /**
      * @test
      * @expectedException \Exception
      */
     public function getRawBody()
     {
-        $transactionList = $this->servis24->getTransactions($this->configuration->account, Servis24::TRANSACTION_ALL);
+        $from = new \DateTime('2016-01-22');
+        $to = new \DateTime('2016-12-12');
+        $transactionList = $this->servis24->getTransactions($this->configuration->account, $from, $to);
 
         print_r($transactionList);
     }

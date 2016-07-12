@@ -40,6 +40,9 @@ class Servis24
     /** @var string */
     private $password;
 
+    /** @var string */
+    private $securedStorage;
+
     /** @var \DOMXPath */
     private $lastData;
 
@@ -49,53 +52,36 @@ class Servis24
     /** @var HttpRequest */
     private $httpRequest;
 
-    /*array(
-      0 =>'Vše',
-      1 => 'Příjmy',
-      2 => 'Výdaje',
-      3 => 'Vklad / výběr na pokladně',
-      4 => 'Trvalé platby',
-      5 => 'SIPO',
-      6 => 'Domácí platby',
-      7 => 'Inkaso',
-      8 => 'Zahraniční platby'
-      9 => 'Platby kartou',
-      10 => 'Výběry z bankomatu',
-      11 => 'Splátky úvěrů v ČS',
-      12 => 'SEPA platba'
-    );*/
+
     const TRANSACTION_ALL = 0;
-    const TRANSACTION_REVENUES = 1;
+    const TRANSACTION_INCOME = 1;
     const TRANSACTION_EXPENSES = 2;
-    const TRANSACTION_DEPOSIT = 3;
-    const TRANSACTION_RECURRING = 4;
-    const TRANSACTION_SIPO = 5;
-    const TRANSACTION_HOME = 6;
-    const TRANSACTION_COLLECTION = 7;
-    const TRANSACTION_FOREIGN = 8;
-    const TRANSACTION_CARD = 9;
-    const TRANSACTION_ATM = 10;
-    const TRANSACTION_LOANS = 11;
-    const TRANSACTION_SEPA = 12;
 
 
     /**
      * Servis24 constructor.
      * @param string $clientId Client ID
      * @param string $password Password
-     * @param null|string $cookieJar path to store cookie jar, default is /tmp/cookiejar.txt
+     * @param string $securedStorage path to directory where TMP data will be stored, this directory should be protected from unauthorized access!!!
+     * @throws \Exception
      */
-    public function __construct($clientId, $password, $cookieJar = null)
+    public function __construct($clientId, $password, $securedStorage)
     {
         $this->clientId = $clientId;
         $this->password = $password;
+        $this->securedStorage = $securedStorage;
 
-        if (is_null($cookieJar)) {
-            $cookieJar = tempnam('/tmp', 'cookiejar.txt');
+        if (!is_dir($securedStorage))
+        {
+            throw new \Exception('Secured storage '.$securedStorage.' not found!');
         }
 
-        $this->httpRequest = new HttpRequest($cookieJar);
-        $this->signIn();
+        if (!is_writable($securedStorage))
+        {
+            throw new \Exception('Secured storage '.$securedStorage.' is not writable!');
+        }
+
+        $this->httpRequest = new HttpRequest($securedStorage.'/cookiejar.txt');
     }
 
     /**
@@ -104,7 +90,7 @@ class Servis24
     public function __destruct()
     {
         //When we try to login again withnout proper logout... their web is doing weird things
-        $this->signOut();
+        //!FIXME $this->signOut();
     }
 
     /**
@@ -132,6 +118,27 @@ class Servis24
 
             $this->httpRequest->post($url, $postData);
         }
+    }
+
+    private function checkSignedIn()
+    {
+        if (!$this->isSignedIn())
+        {
+            $this->signIn();
+        }
+    }
+
+
+    /**
+     * @return bool
+     * @throws \Exception
+     */
+    private function isSignedIn()
+    {
+        $httpResponse = $this->httpRequest->get('https://www.servis24.cz/ebanking-s24/ib/base/inf/productlist/home?execution=e2s1');
+        $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+        $logoutButton = $xpath->query('//button[@id="logoutButton"]');
+        return ($logoutButton->length > 0);
     }
 
     /**
@@ -205,12 +212,17 @@ class Servis24
      * @return array
      * @throws \Exception
      */
-    public function getTransactions($account, $category = 0)
+    public function getTransactionsOld($account, $category = 0)
     {
+        //We need to be signed in for this action
+        $this->checkSignedIn();
+
+
         $url = 'https://www.servis24.cz/ebanking-s24/ib/base/pas/th/get?execution=e3s1';
 
         $httpResponse = $this->httpRequest->get($url, ['execution' => 'e3s1']);
         $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+
         $lastUrl = $httpResponse->getLastUrl();
 
         $this->lastData = $xpath;
@@ -358,6 +370,257 @@ class Servis24
         } else {
             throw new \Exception('Failed to load transaction form');
         }
+    }
+
+
+    public function getTransactions($account, \DateTime $fromDate = null, \DateTime $toDate = null)
+    {
+        //We need to be signed in for this action
+        $this->checkSignedIn();
+
+        //Process dates
+        $now = new \DateTime;
+        if ($fromDate > $now)
+        {
+            $fromDate = $now;
+        }
+
+        if ($toDate > $now)
+        {
+            $toDate = $now;
+        }
+
+        if ($fromDate > $toDate)
+        {
+            $toDate = $fromDate;
+        }
+
+        $interval = new \DateInterval('P1D');
+        $daterange = new \DatePeriod($fromDate, $interval ,$toDate);
+
+        //Get list of extract transactions for account
+        $url = 'https://www.servis24.cz/ebanking-s24/ib/base/pas/statementlist/get/acc';
+
+        $httpResponse = $this->httpRequest->get($url);
+
+        $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+        $extractForm = $xpath->query('//*[@id="ib_trn_base_pas_statementlist_get"]');
+
+        if (!$extractForm->item(0))
+        {
+            throw new \Exception('Failed to load extract form');
+        }
+
+        $hiddens = $xpath->query('//*[@id="ib_trn_base_pas_statementlist_get"]//input[@type=\'hidden\']');
+        $accountsSelect = $xpath->query('//select[@id="accountnumber"]/option');
+
+        $postData = array();
+        foreach ($hiddens AS $hidden) {
+            $postData[$hidden->getAttribute('name')] = $hidden->getAttribute('value');
+        }
+
+        //Find AccountID
+        $accountId = null;
+        foreach ($accountsSelect AS $options) {
+            if (strpos((string)$options->nodeValue, (string)$account) !== false) {
+                $accountId = $options->getAttribute('value');
+                break;
+            }
+        }
+
+        $postData['accountnumber'] = $accountId;
+        $postData['statementType'] = 'dataStatementsRadioId';
+        $postData['source'] = 'doSearch';
+
+        $urlPost = HttpRequest::absolutizeHtmlUrl($httpResponse->getLastUrl(), $extractForm->item(0)->getAttribute('action'));
+
+        $httpResponse = $this->httpRequest->post($urlPost, $postData);
+
+        $xpath = $httpResponse->getBody(HttpResponse::FORMAT_HTML);
+
+        $table = $xpath->query('//a[starts-with(@id,"table_base_pas_statementlist_daily_data_get_ib_table")]');
+        $extractList = [];
+        if ($table->length) {
+            /** @var \DOMNode $childNode */
+            foreach ($table AS $childNode) {
+                list($name, $id, $mess) = explode(':', $childNode->getAttribute('id'));
+                $extractList[trim($id)] = new \DateTime(implode('-', array_reverse(explode('.', trim($childNode->textContent)))));
+            }
+        }
+
+        //Try to download additional extracts not listed in small list
+        /*!FIXME not working $maxId = max(array_keys($extractList));
+
+        foreach($daterange AS $date)
+        {
+            if ($date->format('Y-m-d') == $now->format('Y-m-d'))
+            {
+                continue;
+            }
+
+            $maxId++;
+            $extractList[$maxId] = $date;
+        }*/
+
+        //Compare it with local list, and download anything new
+        $downloadForm = $xpath->query('//*[@id="form_cicExpGet_lst"]');
+
+        if (!$downloadForm->item(0))
+        {
+            throw new \Exception('Failed to load download form');
+        }
+
+        $hiddens = $xpath->query('//*[@id="form_cicExpGet_lst"]//input[@type=\'hidden\']');
+        $urlPost = HttpRequest::absolutizeHtmlUrl($url, $downloadForm->item(0)->getAttribute('action'));
+        foreach ($extractList AS $id => $date)
+        {
+            $tmpFileName = $this->securedStorage.'/'.$date->format('Y-m-d').'.json';
+            if (!is_file($tmpFileName))
+            {
+                $postData = [];
+
+                foreach ($hiddens AS $hidden) {
+                    $postData[$hidden->getAttribute('name')] = $hidden->getAttribute('value');
+                }
+
+                $postData['source'] = 'table_base_pas_statementlist_daily_data_get_ib_table:'.$id.':j_id_a0';
+
+                $httpResponse = $this->httpRequest->post($urlPost, $postData);
+
+                $headers = $httpResponse->getHeaders();
+
+                if (strpos($headers['all']['Content-Type'], 'text/csv') === false)
+                {
+                    //Proccess only CSV files
+                    throw new \Exception('Not a CSV file');
+                }
+
+                $dataUTF8 = iconv("CP1250", "UTF-8", $httpResponse->getBody(HttpResponse::FORMAT_RAW)); //Convert that shit
+
+                //Parse CSV
+                $rows = str_getcsv($dataUTF8, "\n");
+
+                //Ignore first X lines
+                foreach(range(0, 13) AS $i)
+                {
+                    unset($rows[$i]);
+                }
+                
+                $csv = [];
+
+                foreach ($rows AS $row)
+                {
+                    /*[1] => Array
+                    (
+                        [0] => Datum splatnosti
+                        [1] => Položka
+                        [2] => Číslo protiúčtu
+                        [3] => Obrat
+                        [4] => Měna
+                        [5] => Datum odpisu
+                        [6] => Informace k platbě
+                        [7] => Název protiúčtu
+                        [8] => Var.symb.1
+                        [9] => Bankovní věta
+                        [10] => Konst.symb.
+                        [11] => Spec.symb.
+                        [12] => Var.symb.2
+                        [13] => Částka obratu ISO
+                        [14] => Měna
+                        [15] => Kurz měny obratu
+                        [16] => Kurz měny účtu
+                        [17] => Reference platby
+                        [18] => Kód příkazce
+                        [19] => Kód příjemce
+                        [20] => -
+                    )*/
+
+                    list(
+                        $dueDate,
+                        $type,
+                        $accountNumber,
+                        $veer,
+                        $currency,
+                        $dateOfAttribution,
+                        $paymentInfo,
+                        $accountName,
+                        $bankIdentifier,
+                        $bankWord,
+                        $constantSymbol,
+                        $specSymbol,
+                        $bankIdentifierSecond,
+                        $veerIso,
+                        $currencyIso,
+                        $tradeTurnoverRate,
+                        $exchangeRateAccount,
+                        $paymentReference,
+                        $payerCode,
+                        $recipientCode,
+                        $foo,
+                        ) = $all = str_getcsv($row, ";");
+
+
+                    switch ($type)
+                    {
+                        case 'Úhrada':
+                        case 'Došlá platba':
+                        case 'Úhrada ze zahraničí':
+                        case 'Úrok kredit':
+                            $typeInt = self::TRANSACTION_INCOME;
+                            break;
+
+                        case 'Platba kartou':
+                        case 'Domácí platba - S24/IB':
+                        case 'Výběr z bankomatu ČS':
+                        case 'Výběr z bankomatu jiné banky':
+                        case 'Cena - zahraniční úhrada':
+                        case 'Úrok debet':
+                        case 'Poplatek':
+                            $typeInt = self::TRANSACTION_EXPENSES;
+                            break;
+
+                        default:
+                            $typeInt = '?';
+                            break;
+                    }
+
+                    $csv[] = [
+                        'bankIdentifier' => trim($bankIdentifier),
+                        'amount' => floatval(strtr(trim($veer), [' ' => '', ',' => '.'])),
+                        'currency' => $currency,
+                        'type' => $typeInt,
+                        'all' => $all
+                    ];
+                }
+
+                file_put_contents($tmpFileName, json_encode($csv, JSON_PRETTY_PRINT));
+            }
+        }
+
+        //Procces downloaded data
+
+        $return = [];
+        foreach($daterange AS $date)
+        {
+            $tmpFileName = $this->securedStorage.'/'.$date->format('Y-m-d').'.json';
+            if (is_file($tmpFileName))
+            {
+                $content = @file_get_contents($tmpFileName);
+                if ($content !== false)
+                {
+                    $decoded = json_decode($content);
+                    if ($decoded !== false)
+                    {
+                        foreach($decoded AS $row)
+                        {
+                            $return[] = $row;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $return;
     }
 }
 

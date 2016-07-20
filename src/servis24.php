@@ -300,6 +300,25 @@ class Servis24
             throw new \Exception('Failed to load download form');
         }
 
+        $downloadButton = $xpath->query('//a[contains(@class, \'button_download\')]');
+
+
+        $matches = [];
+        if (preg_match('/{\S+}/i', $downloadButton->item(0)->getAttribute('onclick'), $matches))
+        {
+            $decoded = json_decode(strtr($matches[0], ['\\\'' => '"', 'source' => '"source"']));
+            if (!$decoded)
+            {
+                throw new \Exception('Failed to decode download ID');
+            }
+
+            list($sourceName, $sourceId, $sourceIdentifier) = explode(':', $decoded->source);
+        }
+        else
+        {
+            throw new \Exception('Failed to find download ID');
+        }
+
         $hiddens = $xpath->query('//*[@id="form_cicExpGet_lst"]//input[@type=\'hidden\']');
         $urlPost = HttpRequest::absolutizeHtmlUrl($url, $downloadForm->item(0)->getAttribute('action'));
         foreach ($extractList AS $id => $date)
@@ -313,7 +332,7 @@ class Servis24
                     $postData[$hidden->getAttribute('name')] = $hidden->getAttribute('value');
                 }
 
-                $postData['source'] = 'table_base_pas_statementlist_daily_data_get_ib_table:'.$id.':j_id_a0';
+                $postData['source'] = $sourceName.':'.$id.':'.$sourceIdentifier;
 
                 $httpResponse = $this->httpRequest->post($urlPost, $postData);
 

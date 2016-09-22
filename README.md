@@ -1,7 +1,7 @@
 # servis24.cz
 
 [![Build Status](https://travis-ci.org/Salamek/servis24.cz.svg?branch=master)](https://travis-ci.org/Salamek/servis24.cz)
-
+[![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=D8LQ4XTBLV3C4&lc=CZ&item_number=Salamekservis24.cz&currency_code=EUR)
 <div style="width:100%; height:50px; background:#f2dede; border: 1px solid #ebccd1; color:#a94442;">
   This code is using your LIVE access ID and Password, use only on your own risk.
 </div>

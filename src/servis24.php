@@ -435,11 +435,17 @@ class Servis24
 
                     $csv[] = [
                         'bankIdentifier' => trim($bankIdentifier),
+                        'accountNumber' => trim($accountNumber),
+                        'accountName' => trim($accountName),
+                        'note' => trim($paymentInfo),
+                        'bankWord' => trim($bankWord),
+                        'constantSymbol' => trim($constantSymbol),
+                        'specSymbol' => trim($specSymbol),
                         'amount' => floatval(strtr(trim($veer), [' ' => '', ',' => '.'])),
                         'currency' => $currency,
                         'type' => $typeInt,
                         'dateProcessed' => (new \DateTime($dueDate))->format('Y-m-d'),
-                        'all' => $all
+                        //'all' => $all
                     ];
                 }
 
